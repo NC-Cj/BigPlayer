@@ -6,12 +6,17 @@ from playwright.sync_api import sync_playwright, ElementHandle
 
 class BaseSpider:
 
-    def __init__(self, **kwargs):
+    def __init__(self, connect_over_cdp=None, **kwargs):
         """Initialize the spider with optional browser launch arguments."""
         self._playwright = sync_playwright()
         self._driver = self._playwright.start()
-        self.browser = self._driver.chromium.launch(**kwargs)
-        self.page = None
+
+        if connect_over_cdp:
+            self.browser = self._driver.chromium.connect_over_cdp(connect_over_cdp)
+        else:
+            self.browser = self._driver.chromium.launch(**kwargs)
+        self.ctx = self.browser.contexts[0]
+        self.page = self.ctx.new_page()
 
     def __enter__(self):
         """Enter the runtime context related to this object."""
@@ -21,11 +26,14 @@ class BaseSpider:
         """Exit the runtime context related to this object."""
         self.close()
 
+    @staticmethod
+    def element_query(element, selector) -> ElementHandle:
+        return element.query_selector(selector)
+
     def open(self, url):
         """Open a new page with the given URL."""
-        self.page = self.browser.new_page()
+        # self.page = self.browser.new_page()
         self.page.goto(url)
-        print(type(self.page))
 
     def perform_action_on_element(self, selector, action):
         """Find an element by its selector and perform the given action on it."""
@@ -98,6 +106,23 @@ class BaseSpider:
     def switch_page(self, page_index=-1):
         self.page = self.page.context.pages[page_index]
 
+    def go_back(self):
+        """Go back to the previous page."""
+        self.page.go_back()
+
+    def close_current_page(self):
+        """Close the current page and switch to another page."""
+        if len(self.ctx.pages) > 1:
+            # Switch to the next page if it exists
+            next_page_index = (self.ctx.pages.index(self.page) + 1) % len(self.ctx.pages)
+            # Close the current page
+            self.ctx.pages[self.ctx.pages.index(self.page)].close()
+            # Switch to the next page
+            self.page = self.ctx.pages[next_page_index]
+        else:
+            # If there are no other pages, create a new one
+            self.page = self.ctx.new_page()
+
     def click_element_and_switch_page(self, selector, reset_page=True):
         element = self.find_element(selector)
         element.click()
@@ -117,10 +142,3 @@ class BaseSpider:
             self.browser.close()
         finally:
             self._driver.stop()
-
-
-with BaseSpider() as spider:
-    spider.open("https://www.example.com")
-    c = spider.find_elements()
-
-    # ... do some operations ...
