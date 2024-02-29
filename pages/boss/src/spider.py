@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import traceback
 
 from core.fipsitespider import FipSiteSpider
@@ -18,11 +19,15 @@ def _get_city_code(city_name):
     return data[city_name]
 
 
-def _format(data, mod):
-    if mod == 1:
-        return data.split(" ")[0]
+def extract_salary_range(salary_str):
+    if match := re.match(r'(\d+)-(\d+)K', salary_str):
+        salary_min, salary_max = map(int, match.groups())
+    elif match := re.match(r'(\d+)K', salary_str):
+        salary_min, salary_max = int(match[1]), int(match[1])
     else:
-        raise NotImplemented
+        return None, None
+
+    return salary_min * 1000, salary_max * 1000
 
 
 class BossSite(FipSiteSpider):
@@ -75,6 +80,7 @@ class BossSite(FipSiteSpider):
         hr = hr.split(" ")[0]
         company_name = company_name.strip("公司名称")
         salary = salary.strip("公司名称")
+        min_salary, max_salary = extract_salary_range(salary)
 
         job_title = self.get_element_text("//span[@class='job-title']")
         address = self.get_element_text("//div[@class='location-address']")
