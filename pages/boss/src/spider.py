@@ -1,3 +1,4 @@
+import contextlib
 import json
 import os
 import re
@@ -31,7 +32,7 @@ def extract_salary_range(salary_str):
 
 
 class BossSite(FipSiteSpider):
-    search_key = "汽车零件"
+    category = "服务产品经理"
     # city = [
     #     "苏州",
     #     "南京",
@@ -43,6 +44,13 @@ class BossSite(FipSiteSpider):
     #     "杭州"
     # ]
     city = "南昌"
+    ul_city = [
+        "ABCDE",
+        "FGHJ",
+        "KLMN",
+        "PQRST",
+        "WXYZ"
+    ]
 
     def __init__(self):
         super().__init__(connect_over_cdp="http://localhost:9999")
@@ -58,11 +66,14 @@ class BossSite(FipSiteSpider):
     def run(self):
         self.init_site(devtools=False, headless=True)
         self.open(self.index_url)
-        if isinstance(self.city, str):
-            url = f"{self.page.url.split('city=')[0]}city={_get_city_code(self.city)}"
+        city_code = _get_city_code(self.city)
+        self.search_job()
+
+        if self.page.url.split("=")[-1] != city_code and isinstance(self.city, str):
+            url = f"{self.page.url.split('city=')[0]}city={city_code}"
             self.open(url)
 
-        self.search_job()
+        self.wait_for_timeout(3)
         self.foreach_job_list()
 
     @print_log("返回职位列表")
@@ -76,36 +87,44 @@ class BossSite(FipSiteSpider):
         hr = self.wait_for_element("//h2[@class='name']").text_content()
         company_name = self.get_element_text("//li[@class='company-name']", True)
         salary = self.get_element_text("//span[@class='badge']")
+        job_title = self.get_element_text("//span[@class='job-title']")
+        address = self.get_element_text("//div[@class='location-address']")
 
         hr = hr.split(" ")[0]
-        company_name = company_name.strip("公司名称")
+        company_name = company_name.lstrip("公司名称")
         salary = salary.strip("公司名称")
         min_salary, max_salary = extract_salary_range(salary)
 
-        job_title = self.get_element_text("//span[@class='job-title']")
-        address = self.get_element_text("//div[@class='location-address']")
+        if match := re.search(r"/job_detail/(.*?).html", self.page.url):
+            job_id = match[1]
+        else:
+            return
 
         if not company_name:
             company_name = "Unknown"
         if company_name in self.exclude_list:
-            self.close_current_page()
+            return
 
-        if self.query_company(company_name, self.page.url):
-            self.close_current_page()
-        elif self.go_chat_boss(hr, job_title):
-            data = {
-                "company": company_name,
-                "job_title": job_title,
-                "salary": salary,
-                "address": address,
-                "category": self.search_key,
-                "link": self.page.url
-            }
-            insert(data)
+        if self.query_company(job_id):
+            return
+
+        with contextlib.suppress(Exception):
+            if self.go_chat_boss(hr, job_title):
+                data = {
+                    "company": company_name,
+                    "job_title": job_title,
+                    "min_salary": min_salary,
+                    "max_salary": max_salary,
+                    "address": address,
+                    "category": self.category,
+                    "path": job_id,
+                    "city": self.city,
+                }
+                insert(data)
 
     @print_log("搜索岗位成功")
     def search_job(self):
-        self.fill_element("//input[@class='ipt-search']", self.search_key)
+        self.wait_for_element("//input[@class='ipt-search']").fill(self.category)
         self.click_element("//button[@class='btn btn-search']")
 
     @print_log("当前页面处理完成")
@@ -114,15 +133,15 @@ class BossSite(FipSiteSpider):
         job_list_elements = self.find_elements("//*/li[@class='job-card-wrapper']")
         for el in job_list_elements:
             try:
-                self.goto_job_details(el)
-                self.parse()
+                if self.goto_job_details(el) is not False:
+                    self.parse()
                 self.cleanup()
             except Exception:
                 traceback.print_exc()
 
     @print_log("发布求职信息成功")
     def go_chat_boss(self, hr, job_title):
-        self.page.get_by_role("link", name="立即沟通", disabled=False).click()
+        self.page.get_by_role("link", name="立即沟通").click()
         chat = self.page.get_by_placeholder("请简短描述您的问题")
         message = msg.format(hr, job_title)
         chat.fill(message)
@@ -134,8 +153,9 @@ class BossSite(FipSiteSpider):
         self.click_popup(el)
         self.switch_page()
 
+        if self.wait_for_element("//div[@class='dialog-container']", 2000, True):
+            return False
+
     @print_log("查询该公司是否已投递简历")
-    def query_company(self, company_name, ulr):
-        if company_name == "Unknown":
-            return self.db.query(Boss).filter_by(link=ulr).first()
-        return self.db.query(Boss).filter_by(company=company_name).first()
+    def query_company(self, path):
+        return self.db.query(Boss).filter_by(path=path).first()
