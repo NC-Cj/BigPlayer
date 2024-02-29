@@ -12,11 +12,9 @@ class BaseSpider:
         self._page = None
 
     def __enter__(self):
-        """Enter the runtime context related to this object."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Exit the runtime context related to this object."""
         self.close()
 
     def _init_browser(self, **kwargs):

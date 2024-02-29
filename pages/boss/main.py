@@ -1,4 +1,4 @@
-from spider import BossSite
+from pages.boss.src.spider import BossSite
 
 if __name__ == '__main__':
     with BossSite() as site:

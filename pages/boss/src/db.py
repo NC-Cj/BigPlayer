@@ -2,22 +2,15 @@ import datetime
 
 import pytz
 from sqlalchemy import create_engine, Column, Integer, String, Index, DateTime, UniqueConstraint
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-# 创建SQLite数据库引擎
-engine = create_engine('sqlite:///database.db')
-
-# 创建会话工厂
-Session = sessionmaker(bind=engine)
-session = Session()
-
-# 创建基本模型类
-Base = declarative_base()
+_engine = create_engine('sqlite:///database.db')
+_Session = sessionmaker(bind=_engine)
+_session = _Session()
+_Base = declarative_base()
 
 
-# 定义数据表模型类
-class Boss(Base):
+class Boss(_Base):
     __tablename__ = 'boss'
 
     id = Column(Integer, primary_key=True)
@@ -29,7 +22,6 @@ class Boss(Base):
     link = Column(String)
     creation_time = Column(DateTime, server_default=datetime.datetime.now(pytz.timezone('Asia/Shanghai')).isoformat())
 
-
     # 添加索引
     __table_args__ = (
         UniqueConstraint('company'),
@@ -38,10 +30,15 @@ class Boss(Base):
     )
 
 
-# 创建数据表
-Base.metadata.create_all(engine)
+def setup():
+    _Base.metadata.create_all(_engine)
+    return _session
 
 
 def insert(data):
-    session.add(Boss(**data))
-    session.commit()
+    _session.add(Boss(**data))
+    _session.commit()
+
+
+if __name__ == '__main__':
+    setup()

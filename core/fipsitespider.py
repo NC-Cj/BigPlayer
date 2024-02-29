@@ -1,8 +1,10 @@
+import datetime
 import os
 from typing import Optional, Any
 
-from playwright.sync_api import ElementHandle
+from playwright.sync_api import ElementHandle, Page
 
+from core import utils
 from core.basespider import BaseSpider
 
 
@@ -11,7 +13,11 @@ class FipSiteSpider(BaseSpider):
     def __init__(self, connect_over_cdp):
         super().__init__(connect_over_cdp)
         self._ctx = None
-        self.page = None
+        self.page: Optional[Page] = None
+
+    @staticmethod
+    def now():
+        datetime.datetime.now()
 
     def init_site(self, **kwargs):
         if self._ctx is None:
@@ -20,18 +26,23 @@ class FipSiteSpider(BaseSpider):
         self._ctx = self._browser.contexts[0]
         self.page = self._ctx.new_page()
 
-    @staticmethod
-    def element_query(element, selector) -> ElementHandle:
-        return element.query_selector(selector)
+    def run(self):
+        pass
 
-    def click_open_new_page(self, element, timeout=5000):
+    def parse(self):
+        pass
+
+    def cleanup(self):
+        pass
+
+    def click_popup(self, element, timeout=5000):
         element.click()
         return self.page.wait_for_event('popup', timeout=timeout)
 
-    def open(self, url):
+    def open(self, url, **kwargs):
         """Open a new page with the given URL."""
         # self.page = self.browser.new_page()
-        self.page.goto(url)
+        self.page.goto(url, **kwargs)
 
     def execute_action(self, selector, action):
         """Find an element by its selector and perform the given action on it."""
@@ -39,24 +50,14 @@ class FipSiteSpider(BaseSpider):
         action(element)
 
     def find_element(self, selector, nullable=False) -> ElementHandle:
-        """Find an element by its selector. If nullable is False and the element does not exist, raise an exception."""
+        """通过选择器查找元素"""
         element = self.page.query_selector(selector)
-        if nullable:
-            return element
-        if element is None:
-            raise ValueError(f"No element found for selector: {selector}")
-
-        return element
+        return utils.validate_element_presence(nullable, element, selector)
 
     def find_elements(self, selector, nullable=False) -> list[ElementHandle]:
-        """Find all elements matching the given selector."""
+        """查找给定选择器匹配的所有元素"""
         element = self.page.query_selector_all(selector)
-        if nullable:
-            return element
-        if element is None:
-            raise ValueError(f"No element found for selector: {selector}")
-
-        return element
+        return utils.validate_element_presence(nullable, element, selector)
 
     def click_element(self, selector):
         self.execute_action(selector, lambda element: element.click())
@@ -82,9 +83,8 @@ class FipSiteSpider(BaseSpider):
         """Waiting element"""
         return self.page.wait_for_selector(selector, state='hidden', timeout=timeout)
 
-    def get_element_text(self, selector) -> Optional[str]:
-        """Get element Text."""
-        element = self.find_element(selector)
+    def get_element_text(self, selector, nullable=False) -> Optional[str]:
+        element = self.find_element(selector, nullable)
         return element.text_content()
 
     def get_element_attribute(self, selector, attribute) -> Optional[str]:
