@@ -2,6 +2,7 @@ import datetime
 import os
 from typing import Optional, Any
 
+import playwright
 from playwright.sync_api import ElementHandle, Page
 
 from core import utils
@@ -49,12 +50,12 @@ class FipSiteSpider(BaseSpider):
         element = self.find_element(selector)
         action(element)
 
-    def find_element(self, selector, nullable=False) -> ElementHandle:
+    def find_element(self, selector, nullable=False) -> Optional[ElementHandle]:
         """通过选择器查找元素"""
         element = self.page.query_selector(selector)
         return utils.validate_element_presence(nullable, element, selector)
 
-    def find_elements(self, selector, nullable=False) -> list[ElementHandle]:
+    def find_elements(self, selector, nullable=False) -> list[Optional[ElementHandle]]:
         """查找给定选择器匹配的所有元素"""
         element = self.page.query_selector_all(selector)
         return utils.validate_element_presence(nullable, element, selector)
@@ -71,9 +72,15 @@ class FipSiteSpider(BaseSpider):
     def press_key(self, key):
         self.page.keyboard.press(key)
 
-    def wait_for_element(self, selector, timeout=10000) -> ElementHandle:
+    def wait_for_element(self, selector, timeout=10000, allow_exceptions=False) -> Optional[ElementHandle]:
         """Waiting element"""
-        return self.page.wait_for_selector(selector, timeout=timeout)
+        try:
+            return self.page.wait_for_selector(selector, timeout=timeout)
+        except playwright._impl._api_types.TimeoutError as e:
+            if allow_exceptions:
+                return None
+            else:
+                raise e
 
     def wait_for_element_to_be_visible(self, selector, timeout=10) -> ElementHandle:
         """Waiting element"""
@@ -85,7 +92,7 @@ class FipSiteSpider(BaseSpider):
 
     def get_element_text(self, selector, nullable=False) -> Optional[str]:
         element = self.find_element(selector, nullable)
-        return element.text_content()
+        return element if element is None else element.text_content()
 
     def get_element_attribute(self, selector, attribute) -> Optional[str]:
         element = self.find_element(selector)
