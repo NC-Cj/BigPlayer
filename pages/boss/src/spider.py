@@ -142,6 +142,10 @@ class BossSite(FipSiteSpider):
     @print_log("发布求职信息成功")
     def go_chat_boss(self, hr, job_title):
         self.page.get_by_role("link", name="立即沟通").click()
+
+        if self.validate_dialog() is False:
+            return True
+
         chat = self.page.get_by_placeholder("请简短描述您的问题")
         message = msg.format(hr, job_title)
         chat.fill(message)
@@ -152,7 +156,9 @@ class BossSite(FipSiteSpider):
     def goto_job_details(self, el):
         self.click_popup(el)
         self.switch_page()
+        return self.validate_dialog()
 
+    def validate_dialog(self):
         if self.wait_for_element("//div[@class='dialog-container']", 2000, True):
             return False
 
