@@ -119,7 +119,6 @@ class FipSiteSpider(BaseSpider):
             return element.text_content()
         else:
             logger.error(f"Find element failed: {selector}")
-            self.page.pause()
 
     def get_element_attribute(self, selector, attribute) -> Optional[str]:
         element = self.find_element(selector)
