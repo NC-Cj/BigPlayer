@@ -4,6 +4,8 @@ import os
 import re
 import traceback
 
+from loguru import logger
+
 from core.fipsitespider import FipSiteSpider
 from core.utils import print_log
 from .db import setup, Boss, insert
@@ -32,7 +34,7 @@ def extract_salary_range(salary_str):
 
 
 class BossSite(FipSiteSpider):
-    category = "服务产品经理"
+    category = "python开发"
     # city = [
     #     "苏州",
     #     "南京",
@@ -65,11 +67,14 @@ class BossSite(FipSiteSpider):
     @print_log("主任务结束运行")
     def run(self):
         self.init_site(devtools=False, headless=True)
+        self._ctx.set_default_timeout(5000)
         self.open(self.index_url)
+
         city_code = _get_city_code(self.city)
         self.search_job()
 
         if self.page.url.split("=")[-1] != city_code and isinstance(self.city, str):
+            logger.debug("正在重新选择城市")
             url = f"{self.page.url.split('city=')[0]}city={city_code}"
             self.open(url)
 
@@ -84,10 +89,18 @@ class BossSite(FipSiteSpider):
 
     @print_log("工作数据处理完成，开始下一个工作求职")
     def parse(self):
-        hr = self.wait_for_element("//h2[@class='name']").text_content()
+        if match := re.search(r"/job_detail/(.*?).html", self.page.url):
+            job_id = match[1]
+        else:
+            return
+
+        if self.query_company(job_id):
+            return
+
+        hr = self.get_element_text("//h2[@class='name']")
         company_name = self.get_element_text("//li[@class='company-name']", True)
-        salary = self.get_element_text("//span[@class='badge']")
-        job_title = self.get_element_text("//span[@class='job-title']")
+        salary = self.get_element_text("//span[@class='salary']")
+        job_title = self.get_element_text("//div[@class='name']/h1")
         address = self.get_element_text("//div[@class='location-address']")
 
         hr = hr.split(" ")[0]
@@ -95,17 +108,9 @@ class BossSite(FipSiteSpider):
         salary = salary.strip("公司名称")
         min_salary, max_salary = extract_salary_range(salary)
 
-        if match := re.search(r"/job_detail/(.*?).html", self.page.url):
-            job_id = match[1]
-        else:
-            return
-
         if not company_name:
             company_name = "Unknown"
         if company_name in self.exclude_list:
-            return
-
-        if self.query_company(job_id):
             return
 
         with contextlib.suppress(Exception):
@@ -124,7 +129,7 @@ class BossSite(FipSiteSpider):
 
     @print_log("搜索岗位成功")
     def search_job(self):
-        self.wait_for_element("//input[@class='ipt-search']").fill(self.category)
+        self.fill_element("//input[@class='ipt-search']", self.category)
         self.click_element("//button[@class='btn btn-search']")
 
     @print_log("当前页面处理完成")
@@ -133,7 +138,7 @@ class BossSite(FipSiteSpider):
         job_list_elements = self.find_elements("//*/li[@class='job-card-wrapper']")
         for el in job_list_elements:
             try:
-                if self.goto_job_details(el) is not False:
+                if self.goto_job_details(el) is False:
                     self.parse()
                 self.cleanup()
             except Exception:
@@ -141,26 +146,44 @@ class BossSite(FipSiteSpider):
 
     @print_log("发布求职信息成功")
     def go_chat_boss(self, hr, job_title):
+        def chat_again():
+            self.page.locator("span").filter(has_text="继续沟通").click()
+
+            if self.has_dialog():
+                self.page.pause()
+
+            message = msg.format(hr, job_title)
+            self.fill_element("//div[@class='chat-input']", message)
+            self.wait_for_timeout(2)  # 过快发送信息会导致异常
+            self.press_key("Enter")
+            self.page.pause()
+
         self.page.get_by_role("link", name="立即沟通").click()
+        if self.has_dialog():
+            if self.if_chat_ok():
+                chat_again()
+            else:
+                # 如果弹窗不是招呼成功，可能来自学历不匹配或其它"要求性"告知弹窗
+                pass
 
-        if self.validate_dialog() is False:
             return True
-
-        chat = self.page.get_by_placeholder("请简短描述您的问题")
-        message = msg.format(hr, job_title)
-        chat.fill(message)
-        self.press_key("Enter")
-        return True
+        else:
+            chat_again()
 
     @print_log("正在进入职位详情页")
     def goto_job_details(self, el):
-        self.click_popup(el)
-        self.switch_page()
-        return self.validate_dialog()
+        self.click_element_and_switch_page(el)
+        return self.has_dialog()
 
-    def validate_dialog(self):
-        if self.wait_for_element("//div[@class='dialog-container']", 2000, True):
-            return False
+    def has_dialog(self):
+        dialog = bool(self.find_element("//div[@class='dialog-container']", wait=False, nullable=True))
+        logger.warning(f"has dialog===> {dialog}")
+        return dialog
+
+    def if_chat_ok(self):
+        ok = bool(self.page.get_by_text("已向BOSS发送消息", exact=True))
+        logger.warning(f"chat ok===> {ok}")
+        return ok
 
     @print_log("查询该公司是否已投递简历")
     def query_company(self, path):
