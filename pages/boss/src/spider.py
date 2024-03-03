@@ -156,19 +156,19 @@ class BossSite(FipSiteSpider):
             self.fill_element("//div[@class='chat-input']", message)
             self.wait_for_timeout(2)  # 过快发送信息会导致异常
             self.press_key("Enter")
-            self.page.pause()
+            return True
 
         self.page.get_by_role("link", name="立即沟通").click()
         if self.has_dialog():
             if self.if_chat_ok():
-                chat_again()
+                return chat_again()
             else:
                 # 如果弹窗不是招呼成功，可能来自学历不匹配或其它"要求性"告知弹窗
                 pass
 
             return True
         else:
-            chat_again()
+            return chat_again()
 
     @print_log("正在进入职位详情页")
     def goto_job_details(self, el):
