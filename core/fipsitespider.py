@@ -1,9 +1,12 @@
+import contextlib
 import datetime
 import os
 from typing import Optional, Any
 
 import playwright
+from loguru import logger
 from playwright.sync_api import ElementHandle, Page
+from playwright.sync_api import TimeoutError as playTimeoutError
 
 from core import utils
 from core.basespider import BaseSpider
@@ -45,29 +48,50 @@ class FipSiteSpider(BaseSpider):
         # self.page = self.browser.new_page()
         self.page.goto(url, **kwargs)
 
-    def execute_action(self, selector, action):
-        """Find an element by its selector and perform the given action on it."""
-        element = self.find_element(selector)
-        action(element)
+    def _wait_for_selector(self, selector, **kwargs) -> Optional[ElementHandle]:
+        with contextlib.suppress(playTimeoutError):
+            return self.page.wait_for_selector(selector, **kwargs)
 
-    def find_element(self, selector, nullable=False) -> Optional[ElementHandle]:
+    def find_element(self, selector, *, wait=True, nullable=False) -> Optional[ElementHandle]:
         """通过选择器查找元素"""
-        element = self.page.query_selector(selector)
+        if wait:
+            element = self._wait_for_selector(selector)
+        else:
+            element = self.page.query_selector(selector)
         return utils.validate_element_presence(nullable, element, selector)
 
     def find_elements(self, selector, nullable=False) -> list[Optional[ElementHandle]]:
-        """查找给定选择器匹配的所有元素"""
+        """通过选择器查找所有匹配的元素"""
         element = self.page.query_selector_all(selector)
         return utils.validate_element_presence(nullable, element, selector)
 
-    def click_element(self, selector):
-        self.execute_action(selector, lambda element: element.click())
+    def click_element(self, selector) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector):
+            element.click()
+        else:
+            logger.error(f"Click element failed: {selector}")
+        return element
 
-    def double_click_element(self, selector):
-        self.execute_action(selector, lambda element: element.dblclick())
+    def double_click_element(self, selector) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector):
+            element.dblclick()
+        else:
+            logger.error(f"double-click element failed: {selector}")
+        return element
 
-    def fill_element(self, selector, text):
-        self.execute_action(selector, lambda element: element.fill(text))
+    def fill_element(self, selector, text) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector):
+            element.fill(text)
+        else:
+            logger.error(f"Fill element failed: {selector}")
+        return element
+
+    def upload_file(self, selector, file_path) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector):
+            element.set_input_files(file_path)
+        else:
+            logger.error(f"Click element failed: {selector}")
+        return element
 
     def press_key(self, key):
         self.page.keyboard.press(key)
@@ -91,8 +115,11 @@ class FipSiteSpider(BaseSpider):
         return self.page.wait_for_selector(selector, state='hidden', timeout=timeout)
 
     def get_element_text(self, selector, nullable=False) -> Optional[str]:
-        element = self.find_element(selector, nullable)
-        return element if element is None else element.text_content()
+        if element := self._wait_for_selector(selector):
+            return element.text_content()
+        else:
+            logger.error(f"Find element failed: {selector}")
+            self.page.pause()
 
     def get_element_attribute(self, selector, attribute) -> Optional[str]:
         element = self.find_element(selector)
@@ -100,9 +127,6 @@ class FipSiteSpider(BaseSpider):
 
     def take_screenshot(self, path) -> bytes:
         return self.page.screenshot(path)
-
-    def upload_file(self, selector, file_path):
-        self.execute_action(selector, lambda element: element.set_input_files(file_path))
 
     def execute_script(self, script) -> Any:
         """Execute a script on the page. The script can be a string of JavaScript code or a path to a JavaScript file."""
@@ -136,11 +160,10 @@ class FipSiteSpider(BaseSpider):
             # If there are no other pages, create a new one
             self.page = self._ctx.new_page()
 
-    def click_element_and_switch_page(self, selector, reset_page=True):
-        element = self.find_element(selector)
+    def click_element_and_switch_page(self, element, reset_page=True):
         element.click()
-
         self.page.wait_for_event('popup')
+
         if reset_page:
             self.switch_page()
         else:
