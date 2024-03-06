@@ -19,10 +19,10 @@ def _get_city_code(city_name):
     with open(path, "r", encoding='utf-8') as f:
         data = json.load(f)
 
-    return data[city_name]
+    return data.get(city_name)
 
 
-def extract_salary_range(salary_str):
+def _extract_salary_range(salary_str):
     if match := re.match(r'(\d+)-(\d+)K', salary_str):
         salary_min, salary_max = map(int, match.groups())
     elif match := re.match(r'(\d+)K', salary_str):
@@ -31,6 +31,11 @@ def extract_salary_range(salary_str):
         return None, None
 
     return salary_min * 1000, salary_max * 1000
+
+
+@print_log("查询公司是否不在考虑范围内")
+def _check_exclude(c, exclude_list):
+    return any(exclude_item in c for exclude_item in exclude_list)
 
 
 class BossSite(FipSiteSpider):
@@ -70,14 +75,8 @@ class BossSite(FipSiteSpider):
         self._ctx.set_default_timeout(5000)
         self.open(self.index_url)
 
-        city_code = _get_city_code(self.city)
         self.search_job()
-
-        if self.page.url.split("=")[-1] != city_code and isinstance(self.city, str):
-            logger.debug("正在重新选择城市")
-            url = f"{self.page.url.split('city=')[0]}city={city_code}"
-            self.open(url)
-
+        self.choice_city()
         self.wait_for_timeout(3)
         self.foreach_job_list()
 
@@ -103,14 +102,15 @@ class BossSite(FipSiteSpider):
         job_title = self.get_element_text("//div[@class='name']/h1")
         address = self.get_element_text("//div[@class='location-address']")
 
+        if not company_name:
+            company_name = "Unknown"
+
         hr = hr.split(" ")[0]
         company_name = company_name.lstrip("公司名称")
         salary = salary.strip("公司名称")
-        min_salary, max_salary = extract_salary_range(salary)
+        min_salary, max_salary = _extract_salary_range(salary)
 
-        if not company_name:
-            company_name = "Unknown"
-        if company_name in self.exclude_list:
+        if _check_exclude(company_name, self.exclude_list):
             return
 
         with contextlib.suppress(Exception):
@@ -132,6 +132,15 @@ class BossSite(FipSiteSpider):
         self.fill_element("//input[@class='ipt-search']", self.category)
         self.click_element("//button[@class='btn btn-search']")
 
+    @print_log("正在重新选择城市")
+    def choice_city(self):
+        if city_code := _get_city_code(self.city):
+            if self.page.url.split("=")[-1] != city_code and isinstance(self.city, str):
+                url = f"{self.page.url.split('city=')[0]}city={city_code}"
+                self.open(url)
+        else:
+            raise KeyError("Invalid city")
+
     @print_log("当前页面处理完成")
     def foreach_job_list(self):
         self.wait_for_element("//ul[@class='job-list-box']")
@@ -140,9 +149,10 @@ class BossSite(FipSiteSpider):
             try:
                 if self.goto_job_details(el) is False:
                     self.parse()
-                self.cleanup()
             except Exception:
                 traceback.print_exc()
+            finally:
+                self.cleanup()
 
     @print_log("发布求职信息成功")
     def go_chat_boss(self, hr, job_title):
@@ -176,7 +186,11 @@ class BossSite(FipSiteSpider):
         return self.has_dialog()
 
     def has_dialog(self):
-        dialog = bool(self.find_element("//div[@class='dialog-container']", wait=False, nullable=True))
+        dialog = bool(
+            self.find_element(
+                "//div[@class='dialog-container']", wait=False, nullable=True
+            )
+        )
         logger.warning(f"has dialog===> {dialog}")
         return dialog
 
@@ -187,4 +201,4 @@ class BossSite(FipSiteSpider):
 
     @print_log("查询该公司是否已投递简历")
     def query_company(self, path):
-        return self.db.query(Boss).filter_by(path=path).first()
+        return self.db.query(Boss).filter_by(path=path).count()

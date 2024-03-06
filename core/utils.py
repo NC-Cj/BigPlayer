@@ -5,7 +5,7 @@ def validate_element_presence(nullable, element, selector):
     if nullable:
         return element
 
-    if element is None:
+    if not element:
         raise ValueError(f"No element found for selector: {selector}")
     return element
 
