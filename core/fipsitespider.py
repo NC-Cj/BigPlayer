@@ -3,7 +3,6 @@ import datetime
 import os
 from typing import Optional, Any
 
-import playwright
 from loguru import logger
 from playwright.sync_api import ElementHandle, Page
 from playwright.sync_api import TimeoutError as playTimeoutError
@@ -52,10 +51,10 @@ class FipSiteSpider(BaseSpider):
         with contextlib.suppress(playTimeoutError):
             return self.page.wait_for_selector(selector, **kwargs)
 
-    def find_element(self, selector, *, wait=True, nullable=False) -> Optional[ElementHandle]:
+    def find_element(self, selector, *, wait=True, nullable=False, **kwargs) -> Optional[ElementHandle]:
         """通过选择器查找元素"""
         if wait:
-            element = self._wait_for_selector(selector)
+            element = self._wait_for_selector(selector, **kwargs)
         else:
             element = self.page.query_selector(selector)
         return utils.validate_element_presence(nullable, element, selector)
@@ -65,29 +64,29 @@ class FipSiteSpider(BaseSpider):
         element = self.page.query_selector_all(selector)
         return utils.validate_element_presence(nullable, element, selector)
 
-    def click_element(self, selector) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(selector):
+    def click_element(self, selector, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector, **kwargs):
             element.click()
         else:
             logger.error(f"Click element failed: {selector}")
         return element
 
-    def double_click_element(self, selector) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(selector):
+    def double_click_element(self, selector, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector, **kwargs):
             element.dblclick()
         else:
             logger.error(f"double-click element failed: {selector}")
         return element
 
-    def fill_element(self, selector, text) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(selector):
+    def fill_element(self, selector, text, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector, **kwargs):
             element.fill(text)
         else:
             logger.error(f"Fill element failed: {selector}")
         return element
 
-    def upload_file(self, selector, file_path) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(selector):
+    def upload_file(self, selector, file_path, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(selector, **kwargs):
             element.set_input_files(file_path)
         else:
             logger.error(f"Click element failed: {selector}")
@@ -100,7 +99,7 @@ class FipSiteSpider(BaseSpider):
         """Waiting element"""
         try:
             return self.page.wait_for_selector(selector, timeout=timeout)
-        except playwright._impl._api_types.TimeoutError as e:
+        except playTimeoutError as e:
             if allow_exceptions:
                 return None
             else:
@@ -114,8 +113,8 @@ class FipSiteSpider(BaseSpider):
         """Waiting element"""
         return self.page.wait_for_selector(selector, state='hidden', timeout=timeout)
 
-    def get_element_text(self, selector, nullable=False) -> Optional[str]:
-        if element := self._wait_for_selector(selector):
+    def get_element_text(self, selector, nullable=False, **kwargs) -> Optional[str]:
+        if element := self._wait_for_selector(selector, **kwargs):
             return element.text_content()
         else:
             logger.error(f"Find element failed: {selector}")
