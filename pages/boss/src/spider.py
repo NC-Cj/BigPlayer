@@ -61,11 +61,7 @@ class BossSite(FipSiteSpider):
         super().__init__(connect_over_cdp="http://localhost:9999")
         self.db = setup()
         self.index_url = "https://www.zhipin.com/?ka=header-home"
-        self.exclude_list = [
-            "中软国际",
-            "华为",
-            "MOSYNX"
-        ]
+        self.exclude_list = []
 
     @print_log("主任务结束运行")
     def run(self):
