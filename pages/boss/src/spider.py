@@ -13,7 +13,6 @@ from .db import setup, Boss, insert
 msg = "尊敬的{}HR，我钟意贵公司发布的{}岗位，各方面技术栈都符合，希望能和你取得联系❤️"
 
 
-@print_log("获取城市代码")
 def _get_city_code(city_name):
     path = os.path.join(os.getcwd(), "asset", "cityCode.json")
     with open(path, "r", encoding='utf-8') as f:
@@ -33,7 +32,6 @@ def _extract_salary_range(salary_str):
     return salary_min * 1000, salary_max * 1000
 
 
-@print_log("查询公司是否不在考虑范围内")
 def _check_exclude(c, exclude_list):
     return any(exclude_item in c for exclude_item in exclude_list)
 
@@ -127,6 +125,11 @@ class BossSite(FipSiteSpider):
                 }
                 insert(data)
 
+    def close(self):
+        logger.warning("进程被主动结束")
+        super().close()
+        os._exit(0)
+
     @print_log("搜索岗位成功")
     def search_job(self):
         self.fill_element("//input[@class='ipt-search']", self.category)
@@ -169,6 +172,10 @@ class BossSite(FipSiteSpider):
             return True
 
         self.page.get_by_role("link", name="立即沟通").click()
+
+        if self.if_been_maximum():
+            self.close()
+
         if self.has_dialog():
             if self.if_chat_ok():
                 return chat_again()
@@ -185,20 +192,15 @@ class BossSite(FipSiteSpider):
         self.click_element_and_switch_page(el)
         return self.has_dialog()
 
-    def has_dialog(self):
-        dialog = bool(
-            self.find_element(
-                "//div[@class='dialog-container']", wait=False, nullable=True
-            )
-        )
-        logger.warning(f"has dialog===> {dialog}")
-        return dialog
-
-    def if_chat_ok(self):
-        ok = bool(self.page.get_by_text("已向BOSS发送消息", exact=True))
-        logger.warning(f"chat ok===> {ok}")
-        return ok
-
     @print_log("查询该公司是否已投递简历")
     def query_company(self, path):
         return self.db.query(Boss).filter_by(path=path).count()
+
+    def has_dialog(self):
+        return bool(self.find_element("//div[@class='dialog-container']", nullable=True, timeout=2 * 1000))
+
+    def if_chat_ok(self):
+        return bool(self.page.get_by_text("已向BOSS发送消息", exact=True))
+
+    def if_been_maximum(self):
+        return bool(self.find_element("//p[contains(text(), '请明天再试')]", nullable=True, timeout=2 * 1000))
