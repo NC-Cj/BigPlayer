@@ -71,14 +71,23 @@ class BossSite(FipSiteSpider):
 
         self.search_job()
         self.choice_city()
-        self.wait_for_timeout(3)
-        self.foreach_job_list()
+
+        while self.page_number >= 1:
+            self.wait_for_timeout(3)
+            self.foreach_job_list()
+            self.next_page()
+            self.page_number -= 1
+
+    def next_page(self):
+        p = int(self.page.url[-1])
+        url = self.page.url[:-1] + (str(p + 1))
+        self.open(url)
 
     @print_log("返回职位列表")
     def cleanup(self):
         self.close_current_page()
         self.switch_page()
-        # self.wait_for_timeout(3)
+        self.wait_for_timeout(2)
 
     @print_log("工作数据处理完成，开始下一个工作求职")
     def parse(self):
@@ -96,6 +105,9 @@ class BossSite(FipSiteSpider):
         job_title = self.get_element_text("//div[@class='name']/h1")
         address = self.get_element_text("//div[@class='location-address']")
 
+        if not address:
+            return
+
         if not company_name:
             company_name = "Unknown"
 
@@ -108,7 +120,7 @@ class BossSite(FipSiteSpider):
             return
 
         with contextlib.suppress(Exception):
-            if self.go_chat_boss(hr, job_title):
+            if self.go_chat_boss(hr, job_title, address):
                 data = {
                     "company": company_name,
                     "job_title": job_title,
@@ -121,7 +133,7 @@ class BossSite(FipSiteSpider):
                 }
                 insert(data)
 
-    def close(self):
+    def _close(self):
         logger.warning("进程被主动结束")
         super().close()
         os._exit(0)
@@ -135,7 +147,7 @@ class BossSite(FipSiteSpider):
     def choice_city(self):
         if city_code := _get_city_code(self.city):
             if self.page.url.split("=")[-1] != city_code and isinstance(self.city, str):
-                url = f"{self.page.url.split('city=')[0]}city={city_code}"
+                url = f"{self.page.url.split('city=')[0]}city={city_code}&page=1"
                 self.open(url)
         else:
             raise KeyError("Invalid city")
@@ -143,8 +155,11 @@ class BossSite(FipSiteSpider):
     @print_log("当前页面处理完成")
     def foreach_job_list(self):
         self.wait_for_element("//ul[@class='job-list-box']")
-        job_list_elements = self.find_elements("//*/li[@class='job-card-wrapper']")
+        job_list_elements = self.find_elements("//li[@class='job-card-wrapper']")
         for el in job_list_elements:
+            if self.read_salary(el):
+                continue
+
             try:
                 if self.goto_job_details(el) is False:
                     self.parse()
@@ -154,14 +169,14 @@ class BossSite(FipSiteSpider):
                 self.cleanup()
 
     @print_log("发布求职信息成功")
-    def go_chat_boss(self, hr, job_title):
+    def go_chat_boss(self, hr, job_title, address):
         def chat_again():
             self.page.locator("span").filter(has_text="继续沟通").click()
 
             if self.has_dialog():
                 self.page.pause()
 
-            message = msg.format(hr, job_title)
+            message = msg.format(hr, job_title, address)
             self.fill_element("//div[@class='chat-input']", message)
             self.wait_for_timeout(2)  # 过快发送信息会导致异常
             self.press_key("Enter")
@@ -170,7 +185,7 @@ class BossSite(FipSiteSpider):
         self.page.get_by_role("link", name="立即沟通").click()
 
         if self.if_been_maximum():
-            self.close()
+            self._close()
 
         if self.has_dialog():
             if self.if_chat_ok():
@@ -190,7 +205,7 @@ class BossSite(FipSiteSpider):
 
     @print_log("查询该公司是否已投递简历")
     def query_company(self, path):
-        return self.db.query(Boss).filter_by(path=path).count()
+        return self.db.query(Boss.id).filter_by(path=path).count()
 
     def has_dialog(self):
         return bool(self.find_element("//div[@class='dialog-container']", nullable=True, timeout=2 * 1000))
@@ -200,3 +215,16 @@ class BossSite(FipSiteSpider):
 
     def if_been_maximum(self):
         return bool(self.find_element("//p[contains(text(), '请明天再试')]", nullable=True, timeout=2 * 1000))
+
+    def read_salary(self, element):
+        try:
+            if salary_el := element.query_selector("//span[@class='salary']"):
+                salary_min, salary_max = _extract_salary_range(salary_el.text_content())
+                if salary_min > self.min_expect_value:
+                    return True
+                if self.max_expect_value - salary_max > 2000:
+                    return True
+            return False
+        except Exception as e:
+            traceback.print_exc()
+            return True
