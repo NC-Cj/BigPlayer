@@ -62,6 +62,9 @@ class BossSite(FipSiteSpider):
         self.db = setup()
         self.index_url = "https://www.zhipin.com/?ka=header-home"
         self.exclude_list = []
+        self.page_number = 2
+        self.max_expect_value = 12000
+        self.min_expect_value = 16000
 
     @print_log("主任务结束运行")
     def run(self):
