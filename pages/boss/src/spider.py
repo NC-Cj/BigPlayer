@@ -10,7 +10,14 @@ from core.fipsitespider import FipSiteSpider
 from core.utils import print_log
 from .db import setup, Boss, insert
 
-msg = "尊敬的{}HR，我钟意贵公司发布的{}岗位，各方面技术栈都符合，希望能和你取得联系❤️"
+msg = "尊敬的{hr}HR，我钟意贵公司发布的{job}岗位，各方面技术栈都符合，希望能和你取得联系❤️\n\n" \
+      "目前状态：在职，寻找机会中\n" \
+      "最快到岗时间：按规定一般在提交离职申请一个月以内\n" \
+      "面试接受度：当前工作地点：{address}，{interview}\n" \
+      "期望薪资：当前职位薪资范围符合\n" \
+      "是否对项目有过0-1的经验：有过数十个项目0-1孵化经历\n" \
+      "个人简介：学习能力强，善于表达，汇报、交流能力好，能够快速融入团队，理解并习惯scrum工作方式，对产品从调研、设计、研发有过完整经验，有pm能力\n\n" \
+      "招聘助手正在向你发送信息，开源地址：https://github.com/NC-Cj/BigPlayer"
 
 
 def _get_city_code(city_name):
@@ -62,6 +69,7 @@ class BossSite(FipSiteSpider):
         self.db = setup()
         self.index_url = "https://www.zhipin.com/?ka=header-home"
         self.exclude_list = []
+        self.now_city = "苏州"
         self.page_number = 2
         self.max_expect_value = 12000
         self.min_expect_value = 16000
@@ -114,9 +122,10 @@ class BossSite(FipSiteSpider):
         if not company_name:
             company_name = "Unknown"
 
-        hr = hr.split(" ")[0]
+        hr = hr.split(" ")[0].strip()
         company_name = company_name.lstrip("公司名称")
-        salary = salary.strip("公司名称")
+        address = address.strip()
+        salary = salary.strip()
         min_salary, max_salary = _extract_salary_range(salary)
 
         if _check_exclude(company_name, self.exclude_list):
@@ -179,7 +188,8 @@ class BossSite(FipSiteSpider):
             if self.has_dialog():
                 self.page.pause()
 
-            message = msg.format(hr, job_title, address)
+            interview = f"是否可以远程面试，合适再进行现场面试（我目前所在地{self.now_city}）" if self.now_city not in address else "可以现场面试"
+            message = msg.format(hr=hr, job=job_title, address=address, interview=interview)
             self.fill_element("//div[@class='chat-input']", message)
             self.wait_for_timeout(2)  # 过快发送信息会导致异常
             self.press_key("Enter")
