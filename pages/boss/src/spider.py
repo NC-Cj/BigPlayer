@@ -3,6 +3,7 @@ import json
 import os
 import re
 import traceback
+from dataclasses import dataclass
 
 from loguru import logger
 
@@ -20,12 +21,7 @@ msg = "尊敬的{hr}HR，我钟意贵公司发布的{job}岗位，各方面技�
       "招聘助手正在向你发送信息，开源地址：https://github.com/NC-Cj/BigPlayer"
 
 
-def _get_city_code(city_name):
-    path = os.path.join(os.getcwd(), "asset", "cityCode.json")
-    with open(path, "r", encoding='utf-8') as f:
-        data = json.load(f)
-
-    return data.get(city_name)
+count = 0
 
 
 def _extract_salary_range(salary_str):
@@ -39,40 +35,33 @@ def _extract_salary_range(salary_str):
     return salary_min * 1000, salary_max * 1000
 
 
-def _check_exclude(c, exclude_list):
-    return any(exclude_item in c for exclude_item in exclude_list)
+@dataclass
+class Settings:
+    category: str = "python工程"
+    expect_city: str = "苏州"
+    min_expect_salary: int = 10000  # 最小期望薪资
+    max_expect_salary: int = 23000  # 最大期望薪资
+    median_expect_salary: int = 13000  # 期望额度，特定情况下主动调整岗位薪资最小、最大带来的差距
+    exclude_list: tuple = ("中软国际", "软通动力", "华为", "MOSYNX", "上海微创软件")
 
 
 class BossSite(FipSiteSpider):
-    category = "python开发"
-    # city = [
-    #     "苏州",
-    #     "南京",
-    #     "南昌",
-    #     "广东",
-    #     "珠海",
-    #     "福州",
-    #     "厦门",
-    #     "杭州"
-    # ]
-    city = "南昌"
-    ul_city = [
-        "ABCDE",
-        "FGHJ",
-        "KLMN",
-        "PQRST",
-        "WXYZ"
-    ]
 
     def __init__(self):
         super().__init__(connect_over_cdp="http://localhost:9999")
-        self.db = setup()
         self.index_url = "https://www.zhipin.com/?ka=header-home"
-        self.exclude_list = []
         self.now_city = "苏州"
-        self.page_number = 2
-        self.max_expect_value = 12000
-        self.min_expect_value = 16000
+        self.crawling_page_number = 3
+        self.db = setup()
+        self.settings = Settings()
+
+    @property
+    def get_city_code(self):
+        path = os.path.join(os.getcwd(), "asset", "cityCode.json")
+        with open(path, "r", encoding='utf-8') as f:
+            data = json.load(f)
+
+        return data.get(self.settings.expect_city)
 
     @print_log("主任务结束运行")
     def run(self):
@@ -83,12 +72,13 @@ class BossSite(FipSiteSpider):
         self.search_job()
         self.choice_city()
 
-        while self.page_number >= 1:
+        while self.crawling_page_number >= 1:
             self.wait_for_timeout(3)
             self.foreach_job_list()
             self.next_page()
-            self.page_number -= 1
+            self.crawling_page_number -= 1
 
+    @print_log("执行下一页")
     def next_page(self):
         p = int(self.page.url[-1])
         url = self.page.url[:-1] + (str(p + 1))
@@ -128,22 +118,25 @@ class BossSite(FipSiteSpider):
         salary = salary.strip()
         min_salary, max_salary = _extract_salary_range(salary)
 
-        if _check_exclude(company_name, self.exclude_list):
+        if self.check_exclude(company_name):
             return
 
         with contextlib.suppress(Exception):
             if self.go_chat_boss(hr, job_title, address):
+                global count
+                count += 1
                 data = {
                     "company": company_name,
                     "job_title": job_title,
                     "min_salary": min_salary,
                     "max_salary": max_salary,
                     "address": address,
-                    "category": self.category,
+                    "category": self.settings.category,
                     "path": job_id,
-                    "city": self.city,
+                    "city": self.settings.expect_city,
                 }
                 insert(data)
+            logger.info(f"已向 {count} 位boss发送消息")
 
     def _close(self):
         logger.warning("进程被主动结束")
@@ -152,14 +145,14 @@ class BossSite(FipSiteSpider):
 
     @print_log("搜索岗位成功")
     def search_job(self):
-        self.fill_element("//input[@class='ipt-search']", self.category)
+        self.fill_element("//input[@class='ipt-search']", self.settings.category)
         self.click_element("//button[@class='btn btn-search']")
 
     @print_log("正在重新选择城市")
     def choice_city(self):
-        if city_code := _get_city_code(self.city):
-            if self.page.url.split("=")[-1] != city_code and isinstance(self.city, str):
-                url = f"{self.page.url.split('city=')[0]}city={city_code}&page=1"
+        if c := self.get_city_code:
+            if self.page.url.split("=")[-1] != c and isinstance(self.settings.expect_city, str):
+                url = f"{self.page.url.split('city=')[0]}city={c}&page=1"
                 self.open(url)
         else:
             raise KeyError("Invalid city")
@@ -169,7 +162,7 @@ class BossSite(FipSiteSpider):
         self.wait_for_element("//ul[@class='job-list-box']")
         job_list_elements = self.find_elements("//li[@class='job-card-wrapper']")
         for el in job_list_elements:
-            if self.read_salary(el):
+            if self.read_salary(el) is False:
                 continue
 
             try:
@@ -189,7 +182,7 @@ class BossSite(FipSiteSpider):
                 self.page.pause()
 
             interview = f"是否可以远程面试，合适再进行现场面试（我目前所在地{self.now_city}）" if self.now_city not in address else "可以现场面试"
-            message = msg.format(hr=hr, job=job_title, address=address, interview=interview)
+            message = msg.format(hr=hr, job=job_title, interview=interview)
             self.fill_element("//div[@class='chat-input']", message)
             self.wait_for_timeout(2)  # 过快发送信息会导致异常
             self.press_key("Enter")
@@ -232,12 +225,33 @@ class BossSite(FipSiteSpider):
     def read_salary(self, element):
         try:
             if salary_el := element.query_selector("//span[@class='salary']"):
-                salary_min, salary_max = _extract_salary_range(salary_el.text_content())
-                if salary_min > self.min_expect_value:
-                    return True
-                if self.max_expect_value - salary_max > 2000:
-                    return True
+                salary = _extract_salary_range(salary_el.text_content())
+                if self.compare_values(salary) is False:
+                    logger.debug(f"岗位薪资范围不符合预期: {salary}￥")
+                    return False
+                return True
             return False
         except Exception as e:
             traceback.print_exc()
             return True
+
+    def compare_values(self, values):
+        var_min, var_max = values
+        i = 0
+        if var_max > self.settings.max_expect_salary:
+            i += 1
+        if var_min > self.settings.median_expect_salary or var_min > self.settings.max_expect_salary:
+            i += 1
+
+        if i > 2:
+            return False
+
+        if var_min < self.settings.min_expect_salary:
+            return var_max >= self.settings.median_expect_salary
+        elif var_min >= self.settings.median_expect_salary:
+            return var_max <= self.settings.max_expect_salary
+        else:
+            return False
+
+    def check_exclude(self, value):
+        return any(item in value for item in self.settings.exclude_list)
