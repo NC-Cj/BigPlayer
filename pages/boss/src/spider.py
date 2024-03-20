@@ -42,7 +42,7 @@ class Settings:
     min_expect_salary: int = 10000  # 最小期望薪资
     max_expect_salary: int = 23000  # 最大期望薪资
     median_expect_salary: int = 13000  # 期望额度，特定情况下主动调整岗位薪资最小、最大带来的差距
-    exclude_list: tuple = ("中软国际", "软通动力", "华为", "MOSYNX", "上海微创软件")
+    exclude_list: tuple = ("中软国际", "软通动力", "华为", "上海微创软件") # 这是已知的外包公司，请自行修改
 
 
 class BossSite(FipSiteSpider):
