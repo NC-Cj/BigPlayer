@@ -243,15 +243,16 @@ class BossSite(FipSiteSpider):
         if var_min > self.settings.median_expect_salary or var_min > self.settings.max_expect_salary:
             i += 1
 
-        if i > 2:
+        if i >= 2:
             return False
 
-        if var_min < self.settings.min_expect_salary:
-            return var_max >= self.settings.median_expect_salary
-        elif var_min >= self.settings.median_expect_salary:
+        if var_min <= self.settings.min_expect_salary:
+            return self.settings.median_expect_salary < var_max <= self.settings.max_expect_salary
+        if var_min >= self.settings.median_expect_salary:
+            if var_min >= self.settings.max_expect_salary:
+                return False
             return var_max <= self.settings.max_expect_salary
-        else:
-            return False
+        return True
 
     def check_exclude(self, value):
         return any(item in value for item in self.settings.exclude_list)
