@@ -7,7 +7,9 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from core.utils import logger
 
-_engine = create_engine('sqlite:///database.db')
+db_file_path = "../database.db"
+
+_engine = create_engine(f'sqlite:///{db_file_path}')
 _Session = sessionmaker(bind=_engine)
 _session = _Session()
 _Base = declarative_base()
