@@ -8,6 +8,7 @@ from playwright.sync_api import TimeoutError as playTimeoutError
 
 from core import utils
 from core.basespider import BaseSpider
+from core.utils import validate_action
 
 
 class FipSiteSpider(BaseSpider):
@@ -66,26 +67,6 @@ class FipSiteSpider(BaseSpider):
         element = self.page.query_selector_all(selector)
         return utils.validate_element_presence(nullable, element, selector)
 
-    def click_element(self, target, **kwargs) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(target, **kwargs):
-            element.click()
-        return element
-
-    def double_click_element(self, target, **kwargs) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(target, **kwargs):
-            element.dblclick()
-        return element
-
-    def fill_element(self, target, text, **kwargs) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(target, **kwargs):
-            element.fill(text)
-        return element
-
-    def upload_file(self, target, file_path, **kwargs) -> Optional[ElementHandle]:
-        if element := self._wait_for_selector(target, **kwargs):
-            element.set_input_files(file_path)
-        return element
-
     def press_key(self, key):
         self.page.keyboard.press(key)
 
@@ -107,13 +88,51 @@ class FipSiteSpider(BaseSpider):
         """Waiting element"""
         return self.page.wait_for_selector(selector, state='hidden', timeout=timeout)
 
+    @validate_action
+    def click_element(self, target, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(target, **kwargs):
+            element.click()
+        return element
+
+    @validate_action
     def get_element_text(self, target, **kwargs) -> Optional[str]:
         if element := self._wait_for_selector(target, **kwargs):
             return element.text_content()
 
+    @validate_action
     def get_element_attribute(self, target, attribute, **kwargs) -> Optional[str]:
         if element := self._wait_for_selector(target, **kwargs):
             return element.get_attribute(attribute)
+
+    @validate_action
+    def double_click_element(self, target, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(target, **kwargs):
+            element.dblclick()
+        return element
+
+    @validate_action
+    def fill_element(self, target, text, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(target, **kwargs):
+            element.fill(text)
+        return element
+
+    @validate_action
+    def upload_file(self, target, file_path, **kwargs) -> Optional[ElementHandle]:
+        if element := self._wait_for_selector(target, **kwargs):
+            element.set_input_files(file_path)
+        return element
+
+    @validate_action
+    def click_element_and_switch_page(self, target, reset_page=True) -> Optional[Page]:
+        """单击某个元素并切换到新页面"""
+        if element := self._wait_for_selector(target):
+            element.click()
+        self.page.wait_for_event('popup')
+
+        if reset_page:
+            self.switch_page()
+        else:
+            return self.page.context.pages[-1]
 
     def take_screenshot(self, path) -> bytes:
         return self.page.screenshot(path)
@@ -153,17 +172,6 @@ class FipSiteSpider(BaseSpider):
         else:
             # If there are no other pages, create a new one
             self.page = self._ctx.new_page()
-
-    def click_element_and_switch_page(self, target, reset_page=True) -> Optional[Page]:
-        """单击某个元素并切换到新页面"""
-        if element := self._wait_for_selector(target):
-            element.click()
-        self.page.wait_for_event('popup')
-
-        if reset_page:
-            self.switch_page()
-        else:
-            return self.page.context.pages[-1]
 
     def wait_for_timeout(self, seconds):
         self.page.wait_for_timeout(seconds * 1000)
