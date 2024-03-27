@@ -95,7 +95,7 @@ class BossSite(FipSiteSpider):
             return
 
         hr = self.get_element_text("//h2[@class='name']")
-        company_name = self.get_element_text("//li[@class='company-name']", True)
+        company_name = self.get_element_text("//li[@class='company-name']")
         salary = self.get_element_text("//span[@class='salary']")
         job_title = self.get_element_text("//div[@class='name']/h1")
         address = self.get_element_text("//div[@class='location-address']")

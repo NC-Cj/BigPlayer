@@ -122,17 +122,14 @@ class FipSiteSpider(BaseSpider):
             element.set_input_files(file_path)
         return element
 
-    @validate_action
-    def click_element_and_switch_page(self, target, reset_page=True) -> Optional[Page]:
+    def click_element_and_switch_page(self, target, reset_page=True) -> Optional[Union[Page, ElementHandle]]:
         """单击某个元素并切换到新页面"""
-        if element := self._wait_for_selector(target):
-            element.click()
-        self.page.wait_for_event('popup')
+        if self.click_element(target):
+            self.page.wait_for_event('popup')
 
-        if reset_page:
+            if not reset_page:
+                return self.page.context.pages[-1]
             self.switch_page()
-        else:
-            return self.page.context.pages[-1]
 
     def take_screenshot(self, path) -> bytes:
         return self.page.screenshot(path)
@@ -149,6 +146,7 @@ class FipSiteSpider(BaseSpider):
 
     def switch_page(self, page_index=-1):
         self.page = self.page.context.pages[page_index]
+        return self.page
 
     def go_back(self):
         """返回上一页"""
