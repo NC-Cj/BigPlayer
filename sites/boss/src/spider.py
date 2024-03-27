@@ -9,17 +9,11 @@ from loguru import logger
 
 from core.fipsitespider import FipSiteSpider
 from core.utils import print_log
-from .db import setup, Boss, insert
+from sites.boss.asset.message import *
 
-msg = "尊敬的{hr}HR，我钟意贵公司发布的{job}岗位，各方面技术栈都符合，希望能和你取得联系❤️\n\n" \
-      "目前状态：在职，寻找机会中\n" \
-      "最快到岗时间：按规定一般在提交离职申请一个月以内\n" \
-      "面试接受度：当前工作地点：{address}，{interview}\n" \
-      "期望薪资：当前职位薪资范围符合\n" \
-      "是否对项目有过0-1的经验：有过数十个项目0-1孵化经历\n" \
-      "个人简介：学习能力强，善于表达，汇报、交流能力好，能够快速融入团队，理解并习惯scrum工作方式，对产品从调研、设计、研发有过完整经验，有pm能力\n\n" \
-      "招聘助手正在向你发送信息，开源地址：https://github.com/NC-Cj/BigPlayer"
+from sites.boss.db.model import *
 
+msg = msg_projectManager
 
 count = 0
 
@@ -37,12 +31,12 @@ def _extract_salary_range(salary_str):
 
 @dataclass
 class Settings:
-    category: str = "python工程"
+    category: str = "技术支持python"
     expect_city: str = "苏州"
-    min_expect_salary: int = 10000  # 最小期望薪资
-    max_expect_salary: int = 23000  # 最大期望薪资
-    median_expect_salary: int = 13000  # 期望额度，特定情况下主动调整岗位薪资最小、最大带来的差距
-    exclude_list: tuple = ("中软国际", "软通动力", "华为", "上海微创软件") # 这是已知的外包公司，请自行修改
+    min_expect_salary: int = 8000  # 最小期望薪资
+    max_expect_salary: int = 20000  # 最大期望薪资
+    median_expect_salary: int = 10000  # 期望额度，特定情况下主动调整岗位薪资最小、最大带来的差距
+    exclude_list: tuple = ("中软国际", "软通动力", "华为", "上海微创软件", "博彦科技")  # 这是已知的外包公司，请自行修改
 
 
 class BossSite(FipSiteSpider):
@@ -52,7 +46,6 @@ class BossSite(FipSiteSpider):
         self.index_url = "https://www.zhipin.com/?ka=header-home"
         self.now_city = "苏州"
         self.crawling_page_number = 3
-        self.db = setup()
         self.settings = Settings()
 
     @property
@@ -65,6 +58,7 @@ class BossSite(FipSiteSpider):
 
     @print_log("主任务结束运行")
     def run(self):
+        setup()
         self.init_site(devtools=False, headless=True)
         self._ctx.set_default_timeout(5000)
         self.open(self.index_url)
@@ -97,7 +91,7 @@ class BossSite(FipSiteSpider):
         else:
             return
 
-        if self.query_company(job_id):
+        if company_exists(job_id):
             return
 
         hr = self.get_element_text("//h2[@class='name']")
@@ -134,6 +128,7 @@ class BossSite(FipSiteSpider):
                     "category": self.settings.category,
                     "path": job_id,
                     "city": self.settings.expect_city,
+                    "creation_time": self.now()
                 }
                 insert(data)
             logger.info(f"已向 {count} 位boss发送消息")
@@ -208,10 +203,6 @@ class BossSite(FipSiteSpider):
     def goto_job_details(self, el):
         self.click_element_and_switch_page(el)
         return self.has_dialog()
-
-    @print_log("查询该公司是否已投递简历")
-    def query_company(self, path):
-        return self.db.query(Boss.id).filter_by(path=path).count()
 
     def has_dialog(self):
         return bool(self.find_element("//div[@class='dialog-container']", nullable=True, timeout=2 * 1000))
