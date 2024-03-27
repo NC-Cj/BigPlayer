@@ -5,15 +5,13 @@ import re
 import traceback
 from dataclasses import dataclass
 
-from loguru import logger
-
 from core.fipsitespider import FipSiteSpider
 from core.utils import print_log
-from sites.boss.asset.message import *
+# from sites.boss.asset.message import *
 
-from sites.boss.db.model import *
+from sites.applyJob.boss.db.model import *
 
-msg = msg_projectManager
+msg = "你好"
 
 count = 0
 
