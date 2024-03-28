@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from core.fipsitespider import FipSiteSpider
 from core.utils import print_log
 # from sites.boss.asset.message import *
+from sites.applyJob.boss.asset.message import *
+from sites.applyJob.model import *
 
 from sites.applyJob.boss.db.model import *
 
@@ -179,6 +181,8 @@ class BossSite(FipSiteSpider):
             self.fill_element("//div[@class='chat-input']", message)
             self.wait_for_timeout(2)  # 过快发送信息会导致异常
             self.press_key("Enter")
+            self.send_vitae_png()
+            self.wait_for_timeout(1.5)  # 过快发送信息会导致异常
             return True
 
         self.page.get_by_role("link", name="立即沟通").click()
@@ -201,6 +205,10 @@ class BossSite(FipSiteSpider):
     def goto_job_details(self, el):
         self.click_element_and_switch_page(el)
         return self.has_dialog()
+
+    @print_log("成功发送简历缩略图")
+    def send_vitae_png(self):
+        self.upload_file("//input[@type='file'][1]", r"D:\code\python\BigPlayer\sites\applyJob\boss\asset\vitae.png")
 
     def has_dialog(self):
         return bool(self.find_element("//div[@class='dialog-container']", nullable=True, timeout=2 * 1000))

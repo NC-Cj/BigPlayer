@@ -29,7 +29,8 @@ class ApplyJob(Base):
         Index('idx_path', 'path'),
         Index('idx_address', 'address'),
         Index('idx_city', 'city'),
-        Index('idx_category', 'category')
+        Index('idx_category', 'category'),
+        Index('idx_platform', 'platform')
     )
 
 
