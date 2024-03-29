@@ -7,13 +7,10 @@ from dataclasses import dataclass
 
 from core.fipsitespider import FipSiteSpider
 from core.utils import print_log
-# from sites.boss.asset.message import *
 from sites.applyJob.boss.asset.message import *
 from sites.applyJob.model import *
 
-from sites.applyJob.boss.db.model import *
-
-msg = "你好"
+msg = msg_developer
 
 count = 0
 
