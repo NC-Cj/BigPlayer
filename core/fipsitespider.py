@@ -20,7 +20,7 @@ class FipSiteSpider(BaseSpider):
 
     @staticmethod
     def now():
-        datetime.datetime.now()
+        return datetime.datetime.now()
 
     def init_site(self, **kwargs):
         if self._ctx is None:
