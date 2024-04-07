@@ -40,6 +40,7 @@ class BossSite(FipSiteSpider):
 
     def __init__(self):
         super().__init__(connect_over_cdp="http://localhost:9999")
+        self.platform = "boss"
         self.index_url = "https://www.zhipin.com/?ka=header-home"
         self.now_city = "苏州"
         self.crawling_page_number = 3
@@ -91,17 +92,14 @@ class BossSite(FipSiteSpider):
         if company_exists(job_id):
             return
 
-        hr = self.get_element_text("//h2[@class='name']")
-        company_name = self.get_element_text("//li[@class='company-name']")
-        salary = self.get_element_text("//span[@class='salary']")
-        job_title = self.get_element_text("//div[@class='name']/h1")
         address = self.get_element_text("//div[@class='location-address']")
-
         if not address:
             return
 
-        if not company_name:
-            company_name = "Unknown"
+        hr = self.get_element_text("//h2[@class='name']")
+        salary = self.get_element_text("//span[@class='salary']")
+        job_title = self.get_element_text("//div[@class='name']/h1")
+        company_name = self.get_element_text("//li[@class='company-name']") or "Unknown"
 
         hr = hr.split(" ")[0].strip()
         company_name = company_name.lstrip("公司名称")
@@ -117,6 +115,7 @@ class BossSite(FipSiteSpider):
                 global count
                 count += 1
                 data = {
+                    "platform": self.platform,
                     "company": company_name,
                     "job_title": job_title,
                     "min_salary": min_salary,
