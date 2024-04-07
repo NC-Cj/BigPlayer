@@ -173,11 +173,11 @@ class BossSite(FipSiteSpider):
                 self.page.pause()
 
             interview = f"是否可以远程面试，合适再进行现场面试（我目前所在地{self.now_city}）" if self.now_city not in address else "可以现场面试"
-            message = msg.format(hr=hr, job=job_title, interview=interview)
+            message = msg.format(interview=interview)
             self.fill_element("//div[@class='chat-input']", message)
             self.wait_for_timeout(2)  # 过快发送信息会导致异常
             self.press_key("Enter")
-            self.send_vitae_png()
+            # self.send_vitae_png()
             self.wait_for_timeout(1.5)  # 过快发送信息会导致异常
             return True
 
