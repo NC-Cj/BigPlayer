@@ -42,8 +42,8 @@ def insert(data):
     try:
         session.add(ApplyJob(**data))
         session.commit()
-    except SQLAlchemyError:
-        logger.warning(f"Error inserting: {data}")
+    except SQLAlchemyError as e:
+        logger.warning(f"Error inserting: {data}, error: {e.args}")
         session.rollback()
 
 
