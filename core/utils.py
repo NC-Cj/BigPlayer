@@ -1,3 +1,7 @@
+from functools import wraps
+from time import sleep
+from typing import Callable, Any
+
 from loguru import logger
 
 
@@ -34,3 +38,25 @@ def print_log(info=None):
         return inner
 
     return wrapper
+def retry(retries: int = 3, delay: float = 1) -> Callable:
+    if retries < 1 or delay <= 0:
+        raise ValueError('Are you high, mate?')
+
+    def decorator(fn: Callable) -> Callable:
+        @wraps(fn)
+        def wrapper(*args, **kwargs) -> Any:
+            for i in range(1, retries + 1):  # 1 to retries + 1 since upper bound is exclusive
+                try:
+                    return fn(*args, **kwargs)
+                except Exception as e:
+                    if i == retries:
+                        logger.error(f'Error: {repr(e)}.')
+                        logger.error(f'"{fn.__name__}()" failed after {retries} retries.')
+                        break
+                    else:
+                        logger.warning(f'Error: {repr(e)} -> Retrying...')
+                        sleep(delay)
+
+        return wrapper
+
+    return decorator
