@@ -8,7 +8,6 @@ from playwright.sync_api import TimeoutError as playTimeoutError
 
 from core import utils
 from core.basespider import BaseSpider
-from core.utils import validate_action
 
 
 class FipSiteSpider(BaseSpider):
@@ -62,6 +61,7 @@ class FipSiteSpider(BaseSpider):
             element = self.page.query_selector(selector)
         return utils.validate_element_presence(nullable, element, selector)
 
+    @utils.retry(delay=3)
     def find_elements(self, selector, nullable=False) -> list[Optional[ElementHandle]]:
         """通过选择器查找所有匹配的元素"""
         element = self.page.query_selector_all(selector)
@@ -94,29 +94,29 @@ class FipSiteSpider(BaseSpider):
             element.click()
         return element
 
-    @validate_action
+    @utils.validate_action
     def get_element_text(self, target, **kwargs) -> Optional[str]:
         if element := self._wait_for_selector(target, **kwargs):
             return element.text_content()
 
-    @validate_action
+    @utils.validate_action
     def get_element_attribute(self, target, attribute, **kwargs) -> Optional[str]:
         if element := self._wait_for_selector(target, **kwargs):
             return element.get_attribute(attribute)
 
-    @validate_action
+    @utils.validate_action
     def double_click_element(self, target, **kwargs) -> Optional[ElementHandle]:
         if element := self._wait_for_selector(target, **kwargs):
             element.dblclick()
         return element
 
-    @validate_action
+    @utils.validate_action
     def fill_element(self, target, text, **kwargs) -> Optional[ElementHandle]:
         if element := self._wait_for_selector(target, **kwargs):
             element.fill(text)
         return element
 
-    @validate_action
+    @utils.validate_action
     def upload_file(self, target, file_path, **kwargs) -> Optional[ElementHandle]:
         if element := self._wait_for_selector(target, **kwargs):
             element.set_input_files(file_path)
