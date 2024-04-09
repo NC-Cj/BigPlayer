@@ -102,7 +102,8 @@ class FipSiteSpider(BaseSpider):
     @utils.validate_action
     def get_element_attribute(self, target, attribute, **kwargs) -> Optional[str]:
         if element := self._wait_for_selector(target, **kwargs):
-            return element.get_attribute(attribute)
+            attr = element.get_attribute(attribute)
+            return attr
 
     @utils.validate_action
     def double_click_element(self, target, **kwargs) -> Optional[ElementHandle]:
