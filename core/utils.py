@@ -15,18 +15,18 @@ def validate_element_presence(nullable, element, selector):
 
 
 def validate_action(fn):
-    def wrapper(*args, **kwargs):
+    def decorator(*args, **kwargs):
         target = args[1]
         result = fn(*args, **kwargs)
         if result is None:
             logger.error(f"Action: {fn.__name__}, Message: {target} invalid ")
         return result
 
-    return wrapper
+    return decorator
 
 
 def print_log(info=None):
-    def wrapper(fn):
+    def decorator(fn):
         def inner(*args, **kwargs):
             result = fn(*args, **kwargs)
 
@@ -37,7 +37,9 @@ def print_log(info=None):
 
         return inner
 
-    return wrapper
+    return decorator
+
+
 def retry(retries: int = 3, delay: float = 1) -> Callable:
     if retries < 1 or delay <= 0:
         raise ValueError('Are you high, mate?')
